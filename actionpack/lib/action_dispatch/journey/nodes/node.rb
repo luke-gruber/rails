@@ -82,7 +82,15 @@ module ActionDispatch
         end
 
         def to_s
-          @to_s ||= Visitors::String::INSTANCE.accept(self, "".dup).freeze
+          return @to_s if @to_s
+
+          string = Visitors::String::INSTANCE.accept(self, "".dup).freeze
+          # Ractorizing an application freezes the route set, and the routes
+          # inspector is the only caller -- it runs on a booted app, from
+          # `rails routes` or the routing error page. Skip the memo rather than
+          # raise, so the error page still renders from a worker.
+          @to_s = string unless frozen?
+          string
         end
 
         def to_dot

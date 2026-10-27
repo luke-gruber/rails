@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 # :markup: markdown
+require "concurrent/map"
 require "action_view/view_paths"
 require "active_support/core_ext/module/attr_internal"
 
@@ -82,6 +83,27 @@ module ActionView
       end
 
       def view_context_class
+        unless ActiveSupport::Ractors.main?
+          # Templates compile into this class, and a Ractor may only define
+          # methods on a class it created itself, so each one needs its own.
+          # UnboundTemplate#bind_locals already keeps its bound templates in a
+          # Ractor-local store for the same reason; this is the matching half.
+          #
+          # Subclass what the main Ractor already built instead of calling
+          # build_view_context_class again: re-including the route and helper
+          # modules reads unshareable state out of modules main created.
+          main_view_context_class = @view_context_class
+          return superclass.view_context_class unless main_view_context_class
+
+          cache = ActiveSupport::Ractors.store_if_absent(:action_view_context_classes) do
+            Concurrent::Map.new
+          end
+
+          return cache.compute_if_absent(self) do
+            main_view_context_class.with_empty_template_cache
+          end
+        end
+
         klass = ActionView::LookupContext.view_context_class
 
         @view_context_class ||= build_view_context_class(klass, supports_path?, _routes, _helpers)

@@ -463,6 +463,28 @@ To keep using the current cache store, you can turn off cache versioning entirel
     initializer "active_record.ractorize" do
       ActiveSupport.on_load(:before_ractorize) do
         ActiveRecord::Base.descendants.each(&:make_reflections_shareable!)
+
+        # Attribute methods are normally defined lazily on first access, which
+        # for a Ractor app means inside a worker: define_attribute_methods takes
+        # GeneratedAttributeMethods::LOCK, a Monitor that cannot be made
+        # shareable, and defines methods on a module the main Ractor created.
+        #
+        # The eager pass in "active_record.define_attribute_methods" is skipped
+        # whenever check_schema_cache_dump_version is on (the default), so do it
+        # here: ractorize! is an explicit opt-in and already requires a booted
+        # app, so the resiliency argument for staying lazy does not apply. Once
+        # @attribute_methods_generated is set, workers return before the lock.
+        ActiveRecord::Base.descendants.each do |model|
+          next if model.abstract_class?
+
+          begin
+            model.define_attribute_methods
+          rescue ActiveRecordError => error
+            warn "Failed to define attribute methods for #{model.name} because of " \
+              "#{error.class}: #{error.message}. Rendering a #{model.name} from a " \
+              "Ractor will raise Ractor::IsolationError."
+          end
+        end
       end
     end
 

@@ -172,7 +172,10 @@ module ActionDispatch
           super
         end
 
-        INSTANCE = new
+        # Frozen so a worker can read it: these visitors are stateless, and a
+        # Ractor may not reach an unshareable value through a constant of a
+        # class another Ractor created.
+        INSTANCE = new.freeze
       end
 
       class String # :nodoc:
@@ -204,7 +207,10 @@ module ActionDispatch
           end
         end
 
-        INSTANCE = new
+        # Frozen so a worker can read it: these visitors are stateless, and a
+        # Ractor may not reach an unshareable value through a constant of a
+        # class another Ractor created.
+        INSTANCE = new.freeze
       end
 
       # class String < FunctionalVisitor # :nodoc:

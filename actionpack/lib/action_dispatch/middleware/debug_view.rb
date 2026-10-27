@@ -9,8 +9,23 @@ require "action_view/base"
 
 module ActionDispatch
   class DebugView < ActionView::Base # :nodoc:
-    RESCUES_TEMPLATE_PATHS = [File.expand_path("templates", __dir__)].freeze
-    HOST_APP_PATH = ENV["RAILS_HOST_APP_PATH"]
+    # Deeply frozen, not just frozen: File.expand_path hands back a mutable
+    # String, and a Ractor may not reach an unshareable value through a constant
+    # of a class another Ractor created.
+    RESCUES_TEMPLATE_PATHS = [File.expand_path("templates", __dir__).freeze].freeze
+    HOST_APP_PATH = ENV["RAILS_HOST_APP_PATH"].freeze
+
+    # The rescue templates compile into this class, and a Ractor may only define
+    # methods on a class it created itself, so a worker rendering the error page
+    # needs its own. with_empty_template_cache builds exactly that: a subclass
+    # whose compiled_method_container points at itself.
+    def self.for_current_ractor
+      return self if ActiveSupport::Ractors.main?
+
+      ActiveSupport::Ractors.store_if_absent(:action_dispatch_debug_view_class) do
+        with_empty_template_cache
+      end
+    end
 
     def initialize(assigns)
       paths = RESCUES_TEMPLATE_PATHS.dup

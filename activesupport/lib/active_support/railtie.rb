@@ -189,5 +189,11 @@ module ActiveSupport
     initializer "active_support.set_log_subscriber_logger", after: :initialize_logger do
       ActiveSupport::LogSubscriber.logger = Rails.logger
     end
+
+    initializer "active_support.ractorize" do
+      ActiveSupport.on_load(:before_ractorize) do
+        ActiveSupport::Editor.make_shareable!
+      end
+    end
   end
 end

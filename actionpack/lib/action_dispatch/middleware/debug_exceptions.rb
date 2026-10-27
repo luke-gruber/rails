@@ -119,7 +119,7 @@ module ActionDispatch
       end
 
       def create_template(request, wrapper)
-        DebugView.new(
+        DebugView.for_current_ractor.new(
           request: request,
           exception_wrapper: wrapper,
           # Everything should use the wrapper, but we need to pass `exception` for legacy

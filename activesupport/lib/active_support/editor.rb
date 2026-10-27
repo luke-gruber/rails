@@ -46,6 +46,17 @@ module ActiveSupport
       def reset
         @current = false
       end
+
+      def make_shareable! # :nodoc:
+        # DebugView#editor_url asks for the current editor for every frame of an
+        # error page. #current memoizes into a class-level instance variable, and
+        # a worker may neither write one on a class the main Ractor created nor
+        # read one holding an unshareable value, so resolve it here and freeze
+        # both it and the registry it reads from.
+        current
+        ActiveSupport::Ractors.make_shareable(@editors)
+        ActiveSupport::Ractors.make_shareable(@current)
+      end
     end
 
     def initialize(url_pattern)

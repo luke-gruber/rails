@@ -155,7 +155,10 @@ module ActionView
         template.format
       end
 
-      EMPTY_SPACER = new("", nil)
+      # Frozen so workers can read it: a Ractor may not reach an unshareable
+      # value through a constant of a class another Ractor created. Nothing
+      # mutates it -- the collection renderer only reads #body off it.
+      EMPTY_SPACER = new("", nil).freeze
     end
 
     private

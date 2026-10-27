@@ -558,6 +558,18 @@ module ActionDispatch
         @finalized = true
 
         ActiveSupport::Ractors.try_make_shareable(self)
+
+        # The helper modules hold their UrlFor proxy in an @_proxy module ivar,
+        # and a Ractor reading an ivar off a module another Ractor created
+        # requires the value itself to be shareable. Making the route set
+        # shareable above does not cover them: modules are shareable as objects,
+        # so make_shareable never recurses into their ivars. #freeze on the proxy
+        # is not enough either -- shareability is a deep property. Do it after the
+        # route set is shareable, since the proxy holds a reference to it.
+        [ @url_helpers_with_paths, @url_helpers_without_paths ].each do |helpers|
+          proxy = helpers&.instance_variable_get(:@_proxy)
+          ActiveSupport::Ractors.try_make_shareable(proxy) if proxy
+        end
       end
 
       def clear!
