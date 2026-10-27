@@ -15,7 +15,7 @@ module ActionView
   # view paths, used in the resolver cache lookup. Since this key is generated
   # only once during the request, it speeds up all cache accesses.
   class LookupContext # :nodoc:
-    attr_accessor :prefixes
+    attr_reader :prefixes
 
     singleton_class.attr_reader :default_procs, :registered_details
     @default_procs = {}.freeze
@@ -129,9 +129,14 @@ module ActionView
         @cache = old_value
       end
 
+      def partial_cache
+        @partial_cache ||= Concurrent::Map.new
+      end
+
     private
       def _set_detail(key, value) # :doc:
         @details = @details.dup if @digest_cache || @details_key
+        @partial_cache = nil
         @digest_cache = nil
         @details_key = nil
         @details[key] = value
@@ -141,6 +146,19 @@ module ActionView
     # Helpers related to template lookup using the lookup context information.
     module ViewPaths
       attr_reader :view_paths, :html_fallback_for_js
+
+      NO_PREFIXES = [].freeze
+      private_constant :NO_PREFIXES
+
+      def find_partial(path, keys)
+        unbound_template =
+          partial_cache.compute_if_absent(path) do
+            prefixes = path.include?(?/) ? NO_PREFIXES : @prefixes
+            @view_paths.find_all_unbound(path, prefixes, true, @details, details_key).first ||
+              raise(@view_paths.missing_template(path, prefixes, true, @details, details_key, []))
+          end
+        unbound_template.bind_locals(keys)
+      end
 
       def find(name, prefixes = [], partial = false, keys = [], options = {})
         if options.empty? # most common path
@@ -191,10 +209,12 @@ module ActionView
 
       def append_view_paths(paths)
         @view_paths = build_view_paths(@view_paths.to_a + paths)
+        @partial_cache = nil
       end
 
       def prepend_view_paths(paths)
         @view_paths = build_view_paths(paths + @view_paths.to_a)
+        @partial_cache = nil
       end
 
     private
@@ -251,7 +271,7 @@ module ActionView
       @details_key = nil
       @digest_cache = nil
       @cache = true
-      @prefixes = prefixes
+      @prefixes = prefixes.freeze
 
       @details = initialize_details({}, details)
       @view_paths = build_view_paths(view_paths)

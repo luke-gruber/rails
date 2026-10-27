@@ -63,6 +63,25 @@ module ActionView # :nodoc:
       !find(path, prefixes, partial, details, details_key, locals).nil?
     end
 
+    def find_all_unbound(path, prefixes, partial, details, details_key)
+      search_combinations(path, prefixes, paths) do |resolver, name, prefix|
+        templates = resolver.find_all_unbound(name, prefix, partial, details, details_key)
+        templates unless templates.empty?
+      end || []
+    end
+
+    def missing_template(path, prefixes, partial, details, details_key, locals)
+      name = nil
+      searched = []
+      # A single placeholder resolver, so each prefix is listed once.
+      search_combinations(path, prefixes, [nil]) do |_resolver, normalized, prefix|
+        name = normalized
+        searched << prefix
+        nil
+      end
+      MissingTemplate.new(self, name, searched, partial, details)
+    end
+
     private
       # Combines each prefix as it is yielded rather than up front, since
       # callers stop at the first hit.
@@ -103,18 +122,6 @@ module ActionView # :nodoc:
         end
 
         nil
-      end
-
-      def missing_template(path, prefixes, partial, details, details_key, locals)
-        name = nil
-        searched = []
-        # A single placeholder resolver, so each prefix is listed once.
-        search_combinations(path, prefixes, [nil]) do |_resolver, normalized, prefix|
-          name = normalized
-          searched << prefix
-          nil
-        end
-        MissingTemplate.new(self, name, searched, partial, details, details_key, locals)
       end
 
       def typecast(paths)

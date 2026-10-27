@@ -149,6 +149,8 @@ module ActionView
               view_renderer.render(self, options, &block)
             end
           end
+        when String
+          view_renderer.render_simple_partial(self, options, locals, &block)
         else
           if options.respond_to?(:render_in)
             view_renderer.render(self, renderable: options, locals: locals, &block)

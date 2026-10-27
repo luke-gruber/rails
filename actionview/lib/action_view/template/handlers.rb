@@ -63,6 +63,10 @@ module ActionView # :nodoc:
         handler || Handlers.default_template_handler
       end
 
+      def extension_for_handler(handler)
+        Handlers.template_handlers.key(handler)
+      end
+
       register_default :raw, Raw.new.freeze
       register :erb, ERB.new.freeze
       register :html, Html.new.freeze

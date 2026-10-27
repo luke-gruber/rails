@@ -59,6 +59,7 @@ module ActionView
       autoload :Renderer
       autoload :AbstractRenderer
       autoload :PartialRenderer
+      autoload :SimplePartialRenderer
       autoload :CollectionRenderer
       autoload :ObjectRenderer
       autoload :TemplateRenderer

@@ -244,6 +244,14 @@ module ActionView
     NO_IMPLICIT_LOCALS = [].freeze
     private_constant :NO_IMPLICIT_LOCALS
 
+    def details
+      # Unfortunately, templates do not know their locale
+      locale = nil
+
+      handler_name = Template.extension_for_handler(handler)
+      ActionView::TemplateDetails.new(locale, handler_name, format, variant)
+    end
+
     def initialize(source, identifier, handler, locals:, format: nil, variant: nil, virtual_path: nil)
       @source            = source.dup
       @identifier        = identifier
