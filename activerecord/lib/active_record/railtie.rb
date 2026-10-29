@@ -464,6 +464,43 @@ To keep using the current cache store, you can turn off cache versioning entirel
       ActiveSupport.on_load(:before_ractorize) do
         ActiveRecord::Base.descendants.each(&:make_reflections_shareable!)
 
+        # Base#inspect runs attribute values through ::inspection_filter, which
+        # reads the @filter_attributes class-level instance variable and
+        # memoizes the built filter into @inspection_filter. Inspecting a record
+        # from a worker -- rendering one, or an error page showing one -- would
+        # otherwise be the first caller, where neither the read nor the write is
+        # legal. Classes without their own filters delegate to an ancestor, so
+        # only the ones actually holding a list need warming.
+        [ ActiveRecord::Base, *ActiveRecord::Base.descendants ].each do |model|
+          filter_attributes = model.instance_variable_get(:@filter_attributes)
+          next if filter_attributes.nil?
+
+          Ractor.make_shareable(filter_attributes)
+          Ractor.make_shareable(model.inspection_filter)
+        end
+
+        # class_attribute keeps each value in an @__class_attr_<name> instance
+        # variable on the class that set it, and a worker may not read one that
+        # holds an unshareable value. attributes_for_inspect is the one every
+        # Base#inspect reaches -- its production default is an Array -- but any
+        # Array or Hash valued class attribute has the same problem, so sweep
+        # them rather than naming each.
+        #
+        # default_connection_handler is the deliberate exception: it wraps a
+        # Concurrent::Map, which does not implement #freeze, and workers reach
+        # connections through RactorConnectionHandler rather than reading it.
+        [ ActiveRecord::Base, *ActiveRecord::Base.descendants ].each do |model|
+          model.instance_variables.each do |name|
+            next unless name.start_with?("@__class_attr_")
+
+            begin
+              Ractor.make_shareable(model.instance_variable_get(name))
+            rescue NoMethodError, Ractor::Error, FrozenError
+              next
+            end
+          end
+        end
+
         # Attribute methods are normally defined lazily on first access, which
         # for a Ractor app means inside a worker: define_attribute_methods takes
         # GeneratedAttributeMethods::LOCK, a Monitor that cannot be made

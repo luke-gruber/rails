@@ -149,6 +149,19 @@ module ActiveSupport
           extend self
         end
 
+        def self.make_shareable! # :nodoc:
+          # #load identifies the format of every incoming message by asking each
+          # serializer whether it dumped it, so a session or signed cookie read
+          # reaches MessagePackWithFallback.dumped? no matter which serializer
+          # the app configured. That answer is resolved lazily through
+          # Kernel#gem, and RubyGems cannot service it outside the main Ractor:
+          # the call reads Gem's @loaded_specs and goes through methods Bundler
+          # defined with unshareable procs. Settle it here instead.
+          SERIALIZERS.each_value do |serializer|
+            serializer.send(:available?) if serializer.respond_to?(:available?, true)
+          end
+        end
+
         SERIALIZERS = {
           marshal: MarshalWithFallback,
           json: JsonWithFallback,
