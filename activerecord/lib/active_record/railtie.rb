@@ -511,15 +511,28 @@ To keep using the current cache store, you can turn off cache versioning entirel
         # here: ractorize! is an explicit opt-in and already requires a booted
         # app, so the resiliency argument for staying lazy does not apply. Once
         # @attribute_methods_generated is set, workers return before the lock.
-        ActiveRecord::Base.descendants.each do |model|
-          next if model.abstract_class?
+        concrete_models = ActiveRecord::Base.descendants.reject(&:abstract_class?)
 
+        concrete_models.each do |model|
           begin
             model.define_attribute_methods
           rescue ActiveRecordError => error
             warn "Failed to define attribute methods for #{model.name} because of " \
               "#{error.class}: #{error.message}. Rendering a #{model.name} from a " \
               "Ractor will raise Ractor::IsolationError."
+          end
+        end
+
+        # Memoized on first use, which a non-main Ractor can only do by asking the main one.
+        concrete_models.each do |model|
+          begin
+            model.finder_needs_type_condition?
+            model.with_connection do |connection|
+              model._returning_columns_for_insert(connection)
+              model._returning_columns_for_update(connection)
+            end
+          rescue ActiveRecordError
+            next
           end
         end
       end
