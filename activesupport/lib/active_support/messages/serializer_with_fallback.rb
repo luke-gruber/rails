@@ -133,13 +133,21 @@ module ActiveSupport
           private
             def available?
               return @available if defined?(@available)
-              # Check the dependency before loading the wrapper that warns if it is missing.
-              gem "msgpack", ">= 1.7.0"
-              require "msgpack"
-              require "active_support/message_pack"
-              @available = true
-            rescue LoadError
-              @available = false
+
+              # Kernel#gem reads and activates RubyGems' global state, and Bundler
+              # defines it with an unshareable proc, so only the main Ractor can
+              # call it.
+              ActiveSupport::Ractors.on_main(self) do
+                next @available if defined?(@available)
+
+                # Check the dependency before loading the wrapper that warns if it is missing.
+                gem "msgpack", ">= 1.7.0"
+                require "msgpack"
+                require "active_support/message_pack"
+                @available = true
+              rescue LoadError
+                @available = false
+              end
             end
         end
 
@@ -147,19 +155,6 @@ module ActiveSupport
           include MessagePackWithFallback
           include AllowMarshal
           extend self
-        end
-
-        def self.make_shareable! # :nodoc:
-          # #load identifies the format of every incoming message by asking each
-          # serializer whether it dumped it, so a session or signed cookie read
-          # reaches MessagePackWithFallback.dumped? no matter which serializer
-          # the app configured. That answer is resolved lazily through
-          # Kernel#gem, and RubyGems cannot service it outside the main Ractor:
-          # the call reads Gem's @loaded_specs and goes through methods Bundler
-          # defined with unshareable procs. Settle it here instead.
-          SERIALIZERS.each_value do |serializer|
-            serializer.send(:available?) if serializer.respond_to?(:available?, true)
-          end
         end
 
         SERIALIZERS = {

@@ -193,7 +193,6 @@ module ActiveSupport
     initializer "active_support.ractorize" do
       ActiveSupport.on_load(:before_ractorize) do
         ActiveSupport::Editor.make_shareable!
-        ActiveSupport::Messages::SerializerWithFallback.make_shareable!
       end
     end
   end
