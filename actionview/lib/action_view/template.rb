@@ -356,6 +356,10 @@ module ActionView
       @type ||= Types[format]
     end
 
+    def compiled? # :nodoc:
+      @compiled
+    end
+
     def short_identifier
       @short_identifier ||= defined?(Rails.root) ? identifier.delete_prefix("#{Rails.root}/") : identifier
     end
@@ -453,11 +457,16 @@ module ActionView
     end
 
     def freeze # :nodoc:
+      return self if frozen?
+
       unless @compiled
         raise ArgumentError, "Cannot freeze #{short_identifier.inspect}: the template must be compiled first. " \
           "Frozen templates cannot compile, so an uncompiled one could never render."
       end
       strict_locals!
+      # Memoized readers can't assign once frozen; fill them in first.
+      type
+      short_identifier.freeze
       method_name.freeze
       @source.freeze
       @identifier.freeze
@@ -505,7 +514,10 @@ module ActionView
       # just once and removes the source after it is compiled.
       def compile!(view)
         if @compiled
-          if @compiled_method_container && view.compiled_method_container != @compiled_method_container
+          # A view can run the method if its class inherits the container,
+          # which is how a worker Ractor's view class (a subclass of the
+          # main Ractor's) reaches templates the main Ractor compiled.
+          if @compiled_method_container && !view.is_a?(@compiled_method_container)
             raise ArgumentError, "Template #{short_identifier.inspect} was compiled to render with " \
               "#{@compiled_method_container.inspect} but is being rendered with a view whose compiled " \
               "method container is #{view.compiled_method_container.inspect}. A template compiles into " \

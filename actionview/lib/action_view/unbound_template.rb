@@ -23,10 +23,12 @@ module ActionView
       if @strict_locals_template
         @strict_locals_template
       elsif frozen?
+        return @shared_templates[locals] if @shared_templates.key?(locals)
+
         templates = ractor_local_templates
         unless template = templates[locals]
           normalized_locals = normalize_locals(locals)
-          template = templates.compute_if_absent(normalized_locals) { build_template(normalized_locals) }
+          template = templates.compute_if_absent(normalized_locals) { build_frozen_template(normalized_locals) }
           templates[locals.dup] = template
         end
         template
@@ -42,7 +44,7 @@ module ActionView
         @templates.values
       else
         templates = ractor_local_store[self]
-        templates ? templates.values : []
+        @shared_templates.values | (templates ? templates.values : [])
       end
     end
 
@@ -53,6 +55,10 @@ module ActionView
       @virtual_path.freeze
       @details.freeze
       @strict_locals_template.freeze
+      # Templates compiled before freezing (eager loading compiles each one
+      # with no locals) are kept, so every Ractor renders the same method.
+      @shared_templates = @templates.each_pair.select { |_, template| template.compiled? }
+        .to_h { |locals, template| [locals, template.freeze] }.freeze
       @templates = nil
       @write_lock = nil
       super
@@ -65,6 +71,26 @@ module ActionView
 
       def ractor_local_store
         ActiveSupport::Ractors.store_if_absent(:action_view_bound_templates) { Concurrent::Map.new }
+      end
+
+      # A worker Ractor may not define methods on a class the main Ractor
+      # created, so compiling there would mean a copy of the method per
+      # Ractor, each JIT-compiled separately. Ask the main Ractor instead: it
+      # compiles each locals set once into LookupContext.view_context_class,
+      # which every view class inherits from, and returns the template frozen.
+      def build_frozen_template(locals)
+        return build_template(locals) if ActiveSupport::Ractors.main?
+
+        ActiveSupport::Ractors.on_main(self) { shared_template(locals) }
+      end
+
+      def shared_template(locals)
+        store = ActiveSupport::Ractors.store_if_absent(:action_view_shared_templates) { Concurrent::Map.new }
+        store.compute_if_absent(self) { Concurrent::Map.new }.compute_if_absent(locals) do
+          template = build_template(locals)
+          template.send(:compile!, ActionView::LookupContext.view_context_class)
+          ActiveSupport::Ractors.make_shareable(template.freeze)
+        end
       end
 
       def build_bound_template(locals)
