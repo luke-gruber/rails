@@ -134,6 +134,23 @@ module AbstractController
         action_methods
         nil
       end
+
+      private
+        # Defines a reader and a writer for each config key, on the class and on its
+        # instances, like `delegate :key, :key=, to: :config`. They index the options
+        # hash instead of calling `config.key`: that call ends in
+        # OrderedOptions#method_missing, which Ruby can't cache, and with several
+        # Ractors running every uncached call takes the VM lock.
+        def config_delegate(*keys) # :nodoc:
+          keys.each do |key|
+            methods = <<~RUBY
+              def #{key}; config[#{key.inspect}]; end
+              def #{key}=(value); config[#{key.inspect}] = value; end
+            RUBY
+            singleton_class.class_eval methods, __FILE__, __LINE__ - 3
+            class_eval methods, __FILE__, __LINE__ - 4
+          end
+        end
     end
 
     abstract!
