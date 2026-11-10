@@ -193,6 +193,12 @@ module ActiveSupport
     initializer "active_support.ractorize" do
       ActiveSupport.on_load(:before_ractorize) do
         ActiveSupport::Editor.make_shareable!
+
+        # Each converter memoizes its I18n key into a class instance variable
+        # on first use, which a worker may not do.
+        ActiveSupport::NumberHelper.eager_load!
+        ActiveSupport::NumberHelper::NumberConverter.descendants.each(&:i18n_format_key)
+        Ractor.make_shareable(ActiveSupport::NumberHelper::NumberConverter::DEFAULTS)
       end
     end
   end

@@ -464,6 +464,10 @@ To keep using the current cache store, you can turn off cache versioning entirel
       ActiveSupport.on_load(:before_ractorize) do
         ActiveRecord::Base.descendants.each(&:make_reflections_shareable!)
 
+        # Read from workers through @@configurations, e.g. by HashConfig#primary?
+        # when a worker's pool first builds its schema cache (insert_all, upsert).
+        ActiveSupport::Ractors.make_shareable(ActiveRecord::Base.configurations)
+
         # Base#inspect runs attribute values through ::inspection_filter, which
         # reads the @filter_attributes class-level instance variable and
         # memoizes the built filter into @inspection_filter. Inspecting a record

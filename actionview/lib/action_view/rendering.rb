@@ -98,9 +98,23 @@ module ActionView
           cache = ActiveSupport::Ractors.store_if_absent(:action_view_context_classes) do
             Concurrent::Map.new
           end
+          # One container per Ractor, shared by every controller's view class,
+          # like the shared LookupContext.view_context_class on main: a
+          # template (a layout, a shared partial) compiles once per Ractor and
+          # renders from any controller.
+          container = ActiveSupport::Ractors.store_if_absent(:action_view_compiled_method_container) do
+            Module.new
+          end
 
           return cache.compute_if_absent(self) do
-            main_view_context_class.with_empty_template_cache
+            Class.new(main_view_context_class) do
+              include container
+              define_method(:compiled_method_container) { container }
+              define_singleton_method(:compiled_method_container) { container }
+              def inspect
+                "#<ActionView::Base:#{'%#016x' % (object_id << 1)}>"
+              end
+            end
           end
         end
 

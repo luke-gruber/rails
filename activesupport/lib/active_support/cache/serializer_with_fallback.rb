@@ -141,9 +141,6 @@ module ActiveSupport
             def available?
               return @available if defined?(@available)
 
-              # Kernel#gem reads and activates RubyGems' global state, and Bundler
-              # defines it with an unshareable proc, so only the main Ractor can
-              # call it.
               ActiveSupport::Ractors.on_main(self) do
                 next @available if defined?(@available)
 

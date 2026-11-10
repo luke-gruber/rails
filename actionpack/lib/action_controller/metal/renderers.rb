@@ -99,7 +99,9 @@ module ActionController
     #       end
     #     end
     def self.add(key, &block)
-      define_method(_render_with_renderer_method_name(key), &block)
+      # A method defined from an unshareable Proc can only be called from the
+      # Ractor that defined it, so `render json:` would fail in workers.
+      define_method(_render_with_renderer_method_name(key), &ActiveSupport::Ractors.try_shareable_proc(block))
       (@all += [key.to_sym]).freeze
 
       RENDERERS.target = @all

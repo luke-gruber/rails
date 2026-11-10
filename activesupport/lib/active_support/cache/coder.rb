@@ -104,7 +104,7 @@ module ActiveSupport
           end
         end
 
-        STRING_DESERIALIZERS = STRING_ENCODINGS.transform_values { |encoding| StringDeserializer.new(encoding) }
+        STRING_DESERIALIZERS = STRING_ENCODINGS.transform_values { |encoding| StringDeserializer.new(encoding).freeze }.freeze
 
         class LazyEntry < Cache::Entry
           def initialize(serializer, compressor, payload, **options)

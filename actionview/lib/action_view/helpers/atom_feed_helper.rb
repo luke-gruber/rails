@@ -132,7 +132,7 @@ module ActionView
       end
 
       class AtomBuilder # :nodoc:
-        XHTML_TAG_NAMES = %w(content rights title subtitle summary).to_set
+        XHTML_TAG_NAMES = %w(content rights title subtitle summary).to_set.freeze
 
         def initialize(xml)
           @xml = xml

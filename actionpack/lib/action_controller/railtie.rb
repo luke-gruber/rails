@@ -172,6 +172,8 @@ module ActionController
         [AbstractController::Base, *AbstractController::Base.descendants].each do |controller|
           Ractor.make_shareable(controller.config)
           Ractor.make_shareable(controller._wrapper_options) if controller.include?(ActionController::ParamsWrapper)
+          # Read by every `cache` block in a view (combined_fragment_cache_key).
+          Ractor.make_shareable(controller.fragment_cache_keys) if controller.respond_to?(:fragment_cache_keys)
         end
       end
     end

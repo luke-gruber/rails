@@ -144,6 +144,10 @@ module I18n
       if I18n.backend.respond_to?(:translations, true)
         strip_default_procs(I18n.backend.send(:translations))
       end
+      # Backend::Transliterator#transliterate memoizes one transliterator per
+      # locale into the backend (send_data and parameterize go through it), so
+      # build them all before the backend is frozen.
+      locales.each { |locale| I18n.transliterate("", locale:) }
       ActiveSupport::Ractors.make_shareable(I18n.backend)
 
       # Every remaining I18n::Config reader memoizes into a class variable with
